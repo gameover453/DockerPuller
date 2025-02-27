@@ -22,12 +22,20 @@ jobs:
 
     - name: 拉取 Docker 镜像并保存
       run: |
-        mkdir -p docker-images
+        # 生成东八区(+8)时间戳格式 yyyy-mm-dd-HH-MM-SS
+        TIMESTAMP=$(TZ='Asia/Shanghai' date +"%Y-%m-%d-%H-%M-%S")
+        echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+        
+        # 创建文件夹名称: docker-images-时间戳
+        FOLDER_NAME="docker-images-${TIMESTAMP}"
+        echo "FOLDER_NAME=${FOLDER_NAME}" >> $GITHUB_ENV
+        
+        mkdir -p ${FOLDER_NAME}
         images="${{ github.event.inputs.docker_images }}"
         IFS=',' read -r -a image_array <<< "$images"
         
         # 创建镜像列表文件
-        touch docker-images/image-list.txt
+        touch ${FOLDER_NAME}/image-list.txt
         
         for image in "${image_array[@]}"; do
           echo "正在拉取并保存: ${image}"
@@ -36,31 +44,20 @@ jobs:
           
           # 直接保存镜像到tar文件
           docker pull "${image}" --platform "linux/amd64"
-          docker save "${image}" -o "docker-images/${safe_name}-amd64.tar"
+          docker save "${image}" -o "${FOLDER_NAME}/${safe_name}-amd64.tar"
           
           # 记录镜像名到清单文件
-          echo "${image}" >> docker-images/image-list.txt
+          echo "${image}" >> ${FOLDER_NAME}/image-list.txt
         done
 
-    - name: 创建带时间戳的ZIP归档
-      run: |
-        # 生成时间戳格式 yyyy-mm-dd-HH-MM-SS
-        TIMESTAMP=$(date +"%Y-%m-%d-%H-%M-%S")
-        ZIP_FILENAME="docker-images-${TIMESTAMP}.zip"
-        
-        # 将docker-images目录打包成ZIP
-        zip -r "${ZIP_FILENAME}" docker-images/
-        echo "ZIP_FILENAME=${ZIP_FILENAME}" >> $GITHUB_ENV
-
-    - name: 上传ZIP制品
+    - name: 上传制品
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.ZIP_FILENAME }}
-        path: ${{ env.ZIP_FILENAME }}
+        name: ${{ env.FOLDER_NAME }}
+        path: ${{ env.FOLDER_NAME }}/
         retention-days: 1  # 将保留天数设置为 1 天 最多可设置90天
         
     - name: 清理文件
       run: |
-        rm -rf docker-images/
-        rm -f ${{ env.ZIP_FILENAME }}
+        rm -rf ${{ env.FOLDER_NAME }}/
         docker system prune -a -f
