@@ -1,4 +1,4 @@
-name: x86-64 Pull and Save Docker Image
+name: x86-64 拉取并保存 Docker 镜像
 on:
   workflow_dispatch:
     inputs:
@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: 检出代码库
       uses: actions/checkout@v4
 
-    - name: Clean up Docker to free space
+    - name: 清理 Docker 释放空间
       run: |
           docker system prune -a -f
           docker volume prune -f
 
-    - name: Pull Docker Images and Save Directly
+    - name: 拉取 Docker 镜像并保存
       run: |
         mkdir -p docker-images
         images="${{ github.event.inputs.docker_images }}"
@@ -30,7 +30,7 @@ jobs:
         touch docker-images/image-list.txt
         
         for image in "${image_array[@]}"; do
-          echo "Pulling and saving: ${image}"
+          echo "正在拉取并保存: ${image}"
           # 使用简化的镜像名作为文件名
           safe_name=$(echo "${image}" | tr '/:' '_-')
           
@@ -42,14 +42,25 @@ jobs:
           echo "${image}" >> docker-images/image-list.txt
         done
 
-    - name: Upload artifacts directly
+    - name: 创建带时间戳的ZIP归档
+      run: |
+        # 生成时间戳格式 yyyy-mm-dd-HH-MM-SS
+        TIMESTAMP=$(date +"%Y-%m-%d-%H-%M-%S")
+        ZIP_FILENAME="docker-images-${TIMESTAMP}.zip"
+        
+        # 将docker-images目录打包成ZIP
+        zip -r "${ZIP_FILENAME}" docker-images/
+        echo "ZIP_FILENAME=${ZIP_FILENAME}" >> $GITHUB_ENV
+
+    - name: 上传ZIP制品
       uses: actions/upload-artifact@v4
       with:
-        name: docker-images
-        path: docker-images/
+        name: ${{ env.ZIP_FILENAME }}
+        path: ${{ env.ZIP_FILENAME }}
         retention-days: 1  # 将保留天数设置为 1 天 最多可设置90天
         
-    - name: Clean up files
+    - name: 清理文件
       run: |
         rm -rf docker-images/
+        rm -f ${{ env.ZIP_FILENAME }}
         docker system prune -a -f
